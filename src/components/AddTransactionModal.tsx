@@ -70,17 +70,18 @@ export function AddTransactionModal({ isOpen, onClose, initialType = 'expense' }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 font-sans">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden"
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden max-h-[90vh] flex flex-col"
            onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-6 border-b border-slate-100">
+        <div className="flex items-center justify-between p-6 border-b border-slate-100 flex-shrink-0 bg-white z-10">
           <h2 className="text-xl font-bold text-slate-800">Transaksi Baru</h2>
           <button onClick={onClose} className="p-2 -mr-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
         
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          <div className="flex p-1 bg-slate-100 rounded-lg">
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto flex flex-col min-h-0">
+          <div className="p-6 space-y-6 flex-1">
+            <div className="flex p-1 bg-slate-100 rounded-lg">
             <button
               type="button"
               className={cn(
@@ -183,7 +184,7 @@ export function AddTransactionModal({ isOpen, onClose, initialType = 'expense' }
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      className="flex-1 px-3 py-1.5 border border-slate-200 rounded-md text-sm outline-none focus:border-indigo-500"
+                      className="flex-1 min-w-0 px-3 py-1.5 border border-slate-200 rounded-md text-sm outline-none focus:border-indigo-500"
                       placeholder="Kategori baru..."
                       id="new-category-input"
                       onKeyDown={e => {
@@ -209,7 +210,7 @@ export function AddTransactionModal({ isOpen, onClose, initialType = 'expense' }
                           input.value = '';
                         }
                       }}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-md text-sm font-medium"
+                      className="flex-shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap"
                     >
                       Tambah
                     </button>
@@ -240,8 +241,9 @@ export function AddTransactionModal({ isOpen, onClose, initialType = 'expense' }
               />
             </div>
           </div>
+          </div>
 
-          <div className="pt-4">
+          <div className="p-6 border-t border-slate-100 bg-white flex-shrink-0 mt-auto">
             <button
               type="submit"
               className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold shadow-lg transition-colors focus:ring-4 focus:ring-slate-900/20 text-sm flex items-center justify-center gap-2"
