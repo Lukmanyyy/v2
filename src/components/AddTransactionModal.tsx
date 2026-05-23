@@ -2,12 +2,70 @@ import React, { useState } from 'react';
 import { useFinance } from '../hooks/useFinance';
 import { TransactionType } from '../types';
 import { cn } from '../lib/utils';
-import { X, Wallet, Settings } from 'lucide-react';
+import { X, Wallet, Settings, ChevronDown, Check } from 'lucide-react';
 
 interface AddTransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialType?: TransactionType;
+}
+
+interface CustomSelectProps {
+  value: string;
+  onChange: (value: string) => void;
+  options: { label: string; value: string }[];
+  icon?: React.ReactNode;
+}
+
+function CustomSelect({ value, onChange, options, icon }: CustomSelectProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedOption = options.find(o => o.value === value) || options[0];
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className={cn(
+          "w-full flex items-center justify-between text-left py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all bg-white font-medium text-slate-900",
+          icon ? "pl-10 pr-4" : "px-4"
+        )}
+      >
+        {icon && (
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+            {icon}
+          </div>
+        )}
+        <span className="truncate">{selectedOption?.label}</span>
+        <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform", isOpen && "rotate-180")} />
+      </button>
+
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
+          <div className="absolute z-20 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden py-1 max-h-60 overflow-y-auto">
+            {options.map(option => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => {
+                  onChange(option.value);
+                  setIsOpen(false);
+                }}
+                className={cn(
+                  "w-full flex items-center justify-between px-4 py-2 text-sm text-left hover:bg-slate-50 transition-colors",
+                  option.value === value ? "text-indigo-600 font-bold bg-indigo-50/50" : "text-slate-700"
+                )}
+              >
+                <span className="truncate">{option.label}</span>
+                {option.value === value && <Check className="w-4 h-4" />}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 export function AddTransactionModal({ isOpen, onClose, initialType = 'expense' }: AddTransactionModalProps) {
@@ -107,18 +165,12 @@ export function AddTransactionModal({ isOpen, onClose, initialType = 'expense' }
           <div className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1 uppercase tracking-wider">Sumber (Kas/Dompet)</label>
-              <div className="relative">
-                <Wallet className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <select
-                  value={accountId}
-                  onChange={e => setAccountId(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all bg-white font-medium text-slate-900"
-                >
-                  {accounts.map(acc => (
-                    <option key={acc.id} value={acc.id}>{acc.name}</option>
-                  ))}
-                </select>
-              </div>
+              <CustomSelect
+                value={accountId}
+                onChange={setAccountId}
+                options={accounts.map(acc => ({ label: acc.name, value: acc.id }))}
+                icon={<Wallet className="w-4 h-4" />}
+              />
             </div>
 
             <div>
@@ -151,15 +203,11 @@ export function AddTransactionModal({ isOpen, onClose, initialType = 'expense' }
               </div>
               
               {!isEditingCategory ? (
-                <select
+                <CustomSelect
                   value={category}
-                  onChange={e => setCategory(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all bg-white font-medium text-slate-900"
-                >
-                  {categories[type].map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
+                  onChange={setCategory}
+                  options={categories[type].map(c => ({ label: c, value: c }))}
+                />
               ) : (
                 <div className="space-y-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
                   <div className="flex flex-wrap gap-2">
