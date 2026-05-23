@@ -3,11 +3,13 @@ import { useFinance } from '../hooks/useFinance';
 import { format, parseISO, isValid } from 'date-fns';
 import { id } from 'date-fns/locale';
 import { formatCurrency, cn } from '../lib/utils';
-import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, fileText } from 'lucide-react';
+import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, fileText, Download } from 'lucide-react';
 import { Transaction } from '../types';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export function Reports() {
-  const { transactions } = useFinance();
+  const { transactions, balance } = useFinance();
   
   const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -37,6 +39,77 @@ export function Reports() {
 
   const monthName = format(currentDate, 'MMMM yyyy', { locale: id });
 
+  const handleDownload = () => {
+    if (monthlyTransactions.length === 0) return;
+
+    const doc = new jsPDF();
+    
+    // Title
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('LAPORAN KEUANGAN UANGKU', 14, 20);
+    
+    // Subtitle
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Periode: ${monthName}`, 14, 28);
+
+    // Table
+    const tableData = monthlyTransactions.map(tx => [
+      tx.date && isValid(parseISO(tx.date)) ? format(parseISO(tx.date), 'dd MMM yyyy') : '-',
+      tx.type === 'income' ? 'Pemasukan' : 'Pengeluaran',
+      tx.category || '-',
+      tx.note || '-',
+      { 
+        content: formatCurrency(tx.amount), 
+        styles: { 
+          textColor: tx.type === 'income' ? [21, 128, 61] : [220, 38, 38], 
+          halign: 'right' 
+        } 
+      }
+    ]);
+
+    autoTable(doc, {
+      startY: 35,
+      head: [['Tanggal', 'Tipe', 'Kategori', 'Catatan', { content: 'Jumlah', styles: { halign: 'center' } }]],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [79, 70, 229], halign: 'center' },
+      styles: { fontSize: 9 },
+      columnStyles: {
+        4: { halign: 'right' }
+      }
+    });
+
+    // Summary below table
+    const finalY = (doc as any).lastAutoTable.finalY + 10;
+    
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Ringkasan:', 14, finalY);
+    
+    const summaryData = [
+      [{ content: 'Total Pemasukan', styles: { fontStyle: 'bold' } }, { content: formatCurrency(income), styles: { halign: 'right', textColor: [21, 128, 61] } }],
+      [{ content: 'Total Pengeluaran', styles: { fontStyle: 'bold' } }, { content: formatCurrency(expense), styles: { halign: 'right', textColor: [220, 38, 38] } }],
+      [{ content: 'Profit/Loss Bulan Ini', styles: { fontStyle: 'bold' } }, { content: formatCurrency(profitLoss), styles: { halign: 'right', textColor: isProfit ? [21, 128, 61] : [220, 38, 38] } }],
+      [{ content: 'Total Saldo Keseluruhan', styles: { fontStyle: 'bold' } }, { content: formatCurrency(balance), styles: { halign: 'right' } }]
+    ];
+
+    autoTable(doc, {
+      startY: finalY + 5,
+      body: summaryData,
+      theme: 'plain',
+      styles: { fontSize: 10, cellPadding: 3 },
+      columnStyles: {
+        0: { cellWidth: 100 },
+        1: { cellWidth: 80 }
+      }
+    });
+
+    const fileName = `Laporan_Keuangan_${format(currentDate, 'MMM_yyyy', { locale: id })}.pdf`;
+    doc.save(fileName);
+  };
+
   return (
     <div className="space-y-6 flex flex-col h-full text-slate-800">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 sm:gap-4">
@@ -45,22 +118,33 @@ export function Reports() {
           <p className="text-slate-500 text-sm mt-1">Pantau performa keuangan setiap bulan.</p>
         </div>
         
-        <div className="inline-flex items-center bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm self-start sm:self-auto">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 self-start sm:self-auto">
           <button 
-            onClick={handlePrevMonth}
-            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+            onClick={handleDownload}
+            disabled={monthlyTransactions.length === 0}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition-colors shadow-sm font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <ChevronLeft className="w-5 h-5 text-slate-600" />
+            <Download className="w-4 h-4" />
+            <span className="hidden sm:inline">Unduh PDF</span>
           </button>
-          <div className="w-36 text-center font-bold text-slate-800">
-            {monthName}
+          
+          <div className="inline-flex items-center bg-white p-1.5 rounded-xl border border-slate-200 shadow-sm">
+            <button 
+              onClick={handlePrevMonth}
+              className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5 text-slate-600" />
+            </button>
+            <div className="w-32 sm:w-36 text-center font-bold text-slate-800 text-sm sm:text-base">
+              {monthName}
+            </div>
+            <button 
+              onClick={handleNextMonth}
+              className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+            >
+              <ChevronRight className="w-5 h-5 text-slate-600" />
+            </button>
           </div>
-          <button 
-            onClick={handleNextMonth}
-            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-          >
-            <ChevronRight className="w-5 h-5 text-slate-600" />
-          </button>
         </div>
       </div>
 
