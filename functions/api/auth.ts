@@ -17,11 +17,8 @@ export async function onRequest({ request, env }: { request: Request, env: Env }
     return new Response('Method not allowed', { status: 405 });
   }
 
-  const url = new URL(request.url);
-  const action = url.pathname.split('/').pop();
-
   try {
-    const { username, password } = await request.json();
+    const { action, username, password } = await request.json();
     
     if (!username || !password) {
       return new Response(JSON.stringify({ error: 'Username dan password diperlukan' }), {
