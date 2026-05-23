@@ -19,9 +19,10 @@ export function AddTransactionModal({ isOpen, onClose, initialType = 'expense' }
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [note, setNote] = useState('');
   const [isEditingCategory, setIsEditingCategory] = useState(false);
+  const prevIsOpen = React.useRef(false);
 
   React.useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !prevIsOpen.current) {
       setType(initialType);
       setCategory(categories[initialType]?.[0] || '');
       setDate(new Date().toISOString().split('T')[0]);
@@ -32,6 +33,7 @@ export function AddTransactionModal({ isOpen, onClose, initialType = 'expense' }
         setAccountId(accounts[0]?.id || 'default');
       }
     }
+    prevIsOpen.current = isOpen;
   }, [isOpen, initialType, accounts, accountId, categories]);
 
   if (!isOpen) return null;
