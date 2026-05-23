@@ -94,6 +94,17 @@ export function AddTransactionModal({ isOpen, onClose, initialType = 'expense' }
     prevIsOpen.current = isOpen;
   }, [isOpen, initialType, accounts, accountId, categories]);
 
+  React.useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
