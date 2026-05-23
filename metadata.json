@@ -1,0 +1,6 @@
+{
+  "name": "finansialv2",
+  "description": "A comprehensive personal finance tracker with dashboard, transaction management, and charts.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

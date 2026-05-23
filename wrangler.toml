@@ -1,0 +1,7 @@
+name = "finansialv2"
+pages_build_output_dir = "dist"
+compatibility_date = "2024-05-23"
+
+[[kv_namespaces]]
+binding = "finansialv2"
+id = "ISI_DENGAN_KV_ID_ANDA"
