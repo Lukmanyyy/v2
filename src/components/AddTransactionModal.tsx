@@ -3,6 +3,7 @@ import { useFinance } from '../hooks/useFinance';
 import { TransactionType } from '../types';
 import { cn } from '../lib/utils';
 import { X, Wallet, Settings, ChevronDown, Check } from 'lucide-react';
+import { NumericFormat } from 'react-number-format';
 
 interface AddTransactionModalProps {
   isOpen: boolean;
@@ -129,17 +130,13 @@ export function AddTransactionModal({ isOpen, onClose, initialType = 'expense' }
   };
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/\D/g, '');
-    if (value === '') {
-      setAmount('');
-    } else {
-      setAmount(new Intl.NumberFormat('id-ID').format(Number(value)));
-    }
+    // Kept for signature but unused directly by NumericFormat, or we can just remove it
+    // because we'll use onValueChange
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 font-sans">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden max-h-[90vh] flex flex-col"
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 font-sans overscroll-none touch-none">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden max-h-[90vh] flex flex-col overscroll-contain touch-auto"
            onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-6 border-b border-slate-100 flex-shrink-0 bg-white z-10">
           <h2 className="text-xl font-bold text-slate-800">Transaksi Baru</h2>
@@ -188,14 +185,14 @@ export function AddTransactionModal({ isOpen, onClose, initialType = 'expense' }
               <label className="block text-xs font-bold text-slate-700 mb-1 uppercase tracking-wider">Jumlah</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium">Rp</span>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  required
+                <NumericFormat
                   value={amount}
-                  onChange={handleAmountChange}
+                  onValueChange={(values) => setAmount(values.value)}
+                  thousandSeparator="."
+                  decimalSeparator=","
                   className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all font-medium text-slate-900"
                   placeholder="0"
+                  allowNegative={false}
                 />
               </div>
             </div>
