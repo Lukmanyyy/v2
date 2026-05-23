@@ -124,6 +124,7 @@ export function AddTransactionModal({ isOpen, onClose, initialType = 'expense' }
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium">Rp</span>
                 <input
                   type="text"
+                  inputMode="numeric"
                   required
                   value={amount}
                   onChange={handleAmountChange}
