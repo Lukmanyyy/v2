@@ -135,7 +135,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     .catch(() => {
       setSyncStatus('local');
     });
-  }, [transactions, accounts, isLoaded, user]);
+  }, [transactions, accounts, categories, isLoaded, user]);
 
   const addTransaction = (tx: Omit<Transaction, 'id'>) => {
     const newTx: Transaction = { ...tx, id: uuidv4() };
