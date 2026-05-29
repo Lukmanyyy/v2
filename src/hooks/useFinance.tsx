@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { Transaction, FinanceState, Account, CategoriesState, DEFAULT_CATEGORIES } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from './useAuth';
@@ -29,6 +29,9 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [syncStatus, setSyncStatus] = useState<'local' | 'syncing' | 'synced' | 'unauthorized'>('unauthorized');
   const [isLoaded, setIsLoaded] = useState(false);
+  
+  // BIKIN REM DI SINI: Biar gak auto-post pas pertama kali halaman web dibuka
+  const isFirstSync = useRef(true);
 
   const [accounts, setAccounts] = useState<Account[]>(() => {
     const saved = localStorage.getItem(`finance_accounts_${user?.username}`);
@@ -119,6 +122,13 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(`finance_accounts_${user.username}`, JSON.stringify(accounts));
     localStorage.setItem(`finance_categories_${user.username}`, JSON.stringify(categories));
     
+    // JIKA INI ADALAH PROSES SINKRONISASI PERTAMA KALI PAS LOAD HALAMAN, JANGAN KIRIM POST!
+    if (isFirstSync.current) {
+      isFirstSync.current = false;
+      setSyncStatus('synced');
+      return;
+    }
+
     setSyncStatus('syncing');
     fetch('/api/sync', {
       method: 'POST',
