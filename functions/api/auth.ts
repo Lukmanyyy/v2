@@ -17,7 +17,19 @@ export async function onRequest({ request, env }: { request: Request, env: Env }
   try {
     const { action, username, password, telegramId, newPassword } = await request.json();
 
-    // 1. WEB -> MINTA BOT NGIRIM TOMBOL VERIFIKASI
+    // FITUR CEK PROFIL REAL-TIME (SOLUSI BUG TELEGRAM ID)
+    if (action === 'get_profile') {
+      if (!username) return new Response(JSON.stringify({ error: 'Username dibutuhkan' }), { status: 400 });
+      const userKey = `user:${username.toLowerCase()}`;
+      const userStr = await env.finansialv2.get(userKey);
+      if (!userStr) return new Response(JSON.stringify({ error: 'User tidak ditemukan' }), { status: 404 });
+      const user = JSON.parse(userStr);
+      return new Response(JSON.stringify({ username: user.username, telegramId: user.telegramId || null }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // WEB -> MINTA BOT NGIRIM TOMBOL VERIFIKASI
     if (action === 'request_tg_link') {
       if (!username || !telegramId) return new Response(JSON.stringify({ error: 'Data tidak lengkap' }), { status: 400 });
       if (!env.TG_TOKEN) return new Response(JSON.stringify({ error: 'TG_TOKEN belum disetting di server web' }), { status: 500 });
@@ -34,10 +46,10 @@ export async function onRequest({ request, env }: { request: Request, env: Env }
         body: JSON.stringify({ chat_id: telegramId, text: text, parse_mode: 'Markdown', reply_markup: keyboard })
       });
 
-      return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' }});
+      return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
     }
 
-    // 2. BOT -> KONFIRMASI TAUTAN SAAT TOMBOL DIKLIK
+    // BOT -> KONFIRMASI TAUTAN SAAT TOMBOL DIKLIK
     if (action === 'confirm_tg_link') {
       const userKey = `user:${username.toLowerCase()}`;
       const userStr = await env.finansialv2.get(userKey);
@@ -46,10 +58,10 @@ export async function onRequest({ request, env }: { request: Request, env: Env }
       const user = JSON.parse(userStr);
       user.telegramId = telegramId;
       await env.finansialv2.put(userKey, JSON.stringify(user));
-      return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' }});
+      return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
     }
 
-    // 3. BOT -> LEPAS KAITAN (UNLINK)
+    // BOT/WEB -> LEPAS KAITAN (UNLINK)
     if (action === 'unlink_tg') {
       const userKey = `user:${username.toLowerCase()}`;
       const userStr = await env.finansialv2.get(userKey);
@@ -58,10 +70,10 @@ export async function onRequest({ request, env }: { request: Request, env: Env }
         delete user.telegramId;
         await env.finansialv2.put(userKey, JSON.stringify(user));
       }
-      return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' }});
+      return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
     }
 
-    // 4. GET TG ACCOUNTS (Lupa Sandi)
+    // GET TG ACCOUNTS (Lupa Sandi)
     if (action === 'get_tg_accounts') {
       if (!telegramId) return new Response(JSON.stringify({ error: 'Telegram ID dibutuhkan' }), { status: 400 });
       const list = await env.finansialv2.list({ prefix: 'user:' });
@@ -73,10 +85,10 @@ export async function onRequest({ request, env }: { request: Request, env: Env }
           if (user.telegramId && String(user.telegramId) === String(telegramId)) accounts.push(user.username);
         }
       }
-      return new Response(JSON.stringify({ accounts }), { headers: { 'Content-Type': 'application/json' }});
+      return new Response(JSON.stringify({ accounts }), { headers: { 'Content-Type': 'application/json' } });
     }
 
-    // 5. RESET PASSWORD
+    // RESET PASSWORD
     if (action === 'reset_password') {
       if (!telegramId || !username || !newPassword) return new Response(JSON.stringify({ error: 'Data tidak lengkap' }), { status: 400 });
       const userKey = `user:${username.toLowerCase()}`;
@@ -86,37 +98,37 @@ export async function onRequest({ request, env }: { request: Request, env: Env }
       if (String(user.telegramId) !== String(telegramId)) return new Response(JSON.stringify({ error: 'Akses ditolak.' }), { status: 403 });
       user.passwordHash = await hashPassword(newPassword);
       await env.finansialv2.put(userKey, JSON.stringify(user));
-      return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' }});
+      return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
     }
 
-    // 6. REGISTER
+    // REGISTER
     if (action === 'register') {
       if (!username || !password) return new Response(JSON.stringify({ error: 'Username dan password diperlukan' }), { status: 400 });
       const hashedPw = await hashPassword(password);
       const userKey = `user:${username.toLowerCase()}`;
       const existing = await env.finansialv2.get(userKey);
-      if (existing) return new Response(JSON.stringify({ error: 'Username sudah digunakan' }), { status: 400, headers: { 'Content-Type': 'application/json' }});
+      if (existing) return new Response(JSON.stringify({ error: 'Username sudah digunakan' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
       const id = crypto.randomUUID();
       const userData: any = { id, username, passwordHash: hashedPw };
       if (telegramId) userData.telegramId = telegramId;
       await env.finansialv2.put(userKey, JSON.stringify(userData));
-      return new Response(JSON.stringify({ token: id, username }), { headers: { 'Content-Type': 'application/json' }});
+      return new Response(JSON.stringify({ token: id, username }), { headers: { 'Content-Type': 'application/json' } });
     } 
     
-    // 7. LOGIN
+    // LOGIN
     if (action === 'login') {
       if (!username || !password) return new Response(JSON.stringify({ error: 'Username dan password diperlukan' }), { status: 400 });
       const hashedPw = await hashPassword(password);
       const userKey = `user:${username.toLowerCase()}`;
       const userStr = await env.finansialv2.get(userKey);
-      if (!userStr) return new Response(JSON.stringify({ error: 'User tidak ditemukan' }), { status: 401, headers: { 'Content-Type': 'application/json' }});
+      if (!userStr) return new Response(JSON.stringify({ error: 'User tidak ditemukan' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
       const user = JSON.parse(userStr);
-      if (user.passwordHash !== hashedPw) return new Response(JSON.stringify({ error: 'Password salah' }), { status: 401, headers: { 'Content-Type': 'application/json' }});
-      return new Response(JSON.stringify({ token: user.id, username: user.username }), { headers: { 'Content-Type': 'application/json' }});
+      if (user.passwordHash !== hashedPw) return new Response(JSON.stringify({ error: 'Password salah' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({ token: user.id, username: user.username }), { headers: { 'Content-Type': 'application/json' } });
     }
 
     return new Response('Action not found', { status: 404 });
   } catch (e) {
-    return new Response(JSON.stringify({ error: 'Terjadi kesalahan' }), { status: 500, headers: { 'Content-Type': 'application/json' }});
+    return new Response(JSON.stringify({ error: 'Terjadi kesalahan' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 }
