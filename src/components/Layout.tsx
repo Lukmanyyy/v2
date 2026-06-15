@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dashboard } from './Dashboard';
 import { Transactions } from './Transactions';
 import { Accounts } from './Accounts';
 import { Reports } from './Reports';
 import { AddTransactionModal } from './AddTransactionModal';
-import { LayoutDashboard, ReceiptText, Plus, Database, Download, Upload, Wallet, FileText, LogOut, User, Link as LinkIcon, Info } from 'lucide-react';
+import { LayoutDashboard, ReceiptText, Plus, Database, Download, Upload, Wallet, FileText, LogOut, User, Link as LinkIcon, Info, Loader2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { ErrorBoundary } from './ErrorBoundary';
 import { useFinance } from '../hooks/useFinance';
@@ -15,15 +15,39 @@ export function Layout() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState<'income' | 'expense'>('expense');
   
-  // TAMBAHAN STATE BARU UNTUK FITUR LU
+  // STATE MANAGEMENT LU
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [tgInput, setTgInput] = useState('');
   const [isLinkingTg, setIsLinkingTg] = useState(false);
+  const [currentTelegramId, setCurrentTelegramId] = useState<string | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
   const { exportData, importData, syncStatus } = useFinance();
   const { user, logout } = useAuth();
   
+  // CHECK STATUS TELEGRAM REALTIME SAAT MODAL DIBUKA
+  useEffect(() => {
+    if (isProfileMenuOpen && user?.username) {
+      setIsLoadingProfile(true);
+      fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'get_profile', username: user.username })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.telegramId) {
+          setCurrentTelegramId(String(data.telegramId));
+        } else {
+          setCurrentTelegramId(null);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setIsLoadingProfile(false));
+    }
+  }, [isProfileMenuOpen, user?.username]);
+
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -39,7 +63,7 @@ export function Layout() {
       }
     };
     reader.readAsText(file);
-    e.target.value = ''; // reset
+    e.target.value = ''; 
   };
 
   const openModal = (type: 'income' | 'expense' = 'expense') => {
@@ -47,7 +71,6 @@ export function Layout() {
     setIsModalOpen(true);
   };
 
-  // FUNGSI BUAT NAMBAK VERIFIKASI KE BOT
   const handleLinkTg = async () => {
     if (!tgInput.trim()) {
       alert("Masukkan ID Telegram terlebih dahulu!");
@@ -74,6 +97,27 @@ export function Layout() {
       alert("❌ Gagal menghubungi server.");
     } finally {
       setIsLinkingTg(false);
+    }
+  };
+
+  // FUNGSI LEPAS KAITAN LANGSUNG DARI WEB
+  const handleUnlinkTgFromWeb = async () => {
+    if (!window.confirm("Apakah Anda yakin ingin melepas kaitan Telegram dari akun ini?")) return;
+    
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'unlink_tg', username: user?.username })
+      });
+      if (res.ok) {
+        alert("✅ Kaitan Telegram berhasil dilepas!");
+        setCurrentTelegramId(null);
+      } else {
+        alert("❌ Gagal melepas kaitan.");
+      }
+    } catch (e) {
+      alert("❌ Terjadi kesalahan jaringan.");
     }
   };
 
@@ -118,7 +162,6 @@ export function Layout() {
           </div>
 
           <div className="flex items-center gap-2 pl-4 border-l border-slate-200">
-            {/* AVATAR DIUBAH JADI TOMBOL BUAT BUKA INFO AKUN */}
             <button 
               onClick={() => setIsProfileMenuOpen(true)}
               title="Informasi Akun"
@@ -127,7 +170,6 @@ export function Layout() {
                {user?.username?.charAt(0) || <User className="w-4 h-4" />}
             </button>
             
-            {/* TOMBOL KELUAR DIUBAH JADI BUKA MODAL KONFIRMASI */}
             <button
                onClick={() => setIsLogoutConfirmOpen(true)}
                className="text-slate-500 hover:text-rose-600 transition-colors p-1"
@@ -271,9 +313,7 @@ export function Layout() {
 
       <AddTransactionModal isOpen={isModalOpen} initialType={modalType} onClose={() => setIsModalOpen(false)} />
 
-      {/* ========================================== */}
-      {/* MODAL 1: KONFIRMASI LOGOUT DARI SISTEM       */}
-      {/* ========================================== */}
+      {/* MODAL 1: KONFIRMASI LOGOUT */}
       {isLogoutConfirmOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm text-center shadow-2xl scale-in-95">
@@ -283,26 +323,14 @@ export function Layout() {
             <h3 className="text-xl font-bold text-slate-800 mb-2">Keluar Akun?</h3>
             <p className="text-sm text-slate-500 mb-6">Apakah Anda yakin ingin keluar dari sesi ini? Anda harus login kembali untuk masuk.</p>
             <div className="flex gap-3">
-              <button 
-                onClick={() => setIsLogoutConfirmOpen(false)} 
-                className="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 transition-colors"
-              >
-                Batal
-              </button>
-              <button 
-                onClick={logout} 
-                className="flex-1 py-2.5 rounded-xl bg-rose-600 text-white font-bold hover:bg-rose-700 transition-colors"
-              >
-                Ya, Keluar
-              </button>
+              <button onClick={() => setIsLogoutConfirmOpen(false)} className="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 transition-colors">Batal</button>
+              <button onClick={logout} className="flex-1 py-2.5 rounded-xl bg-rose-600 text-white font-bold hover:bg-rose-700 transition-colors">Ya, Keluar</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ========================================== */}
-      {/* MODAL 2: INFORMASI AKUN & TAUTKAN TELEGRAM   */}
-      {/* ========================================== */}
+      {/* MODAL 2: INFORMASI AKUN (DENGAN RECOGNITION STATUS TELEGRAM ID) */}
       {isProfileMenuOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl scale-in-95">
@@ -324,31 +352,55 @@ export function Layout() {
 
               <div>
                 <label className="flex items-center text-sm font-bold text-slate-700 mb-2 gap-2">
-                  <LinkIcon className="w-4 h-4 text-indigo-600" /> Tautkan ke Telegram
+                  <LinkIcon className="w-4 h-4 text-indigo-600" /> Status Telegram
                 </label>
-                <div className="flex gap-2">
-                  <input 
-                    type="text" 
-                    placeholder="Masukkan ID (mis: 12345678)" 
-                    value={tgInput} 
-                    onChange={(e) => setTgInput(e.target.value)} 
-                    className="flex-1 px-3 py-2.5 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all" 
-                  />
-                  <button 
-                    onClick={handleLinkTg} 
-                    disabled={isLinkingTg} 
-                    className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-70 disabled:cursor-not-allowed whitespace-nowrap"
-                  >
-                    {isLinkingTg ? 'Mengirim...' : 'Verifikasi'}
-                  </button>
-                </div>
                 
-                <div className="flex items-start gap-2 mt-3 bg-indigo-50/50 p-2.5 rounded-lg border border-indigo-100">
-                  <Info className="w-4 h-4 text-indigo-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-slate-600 leading-relaxed">
-                    Kaitkan akun untuk menggunakan Bot Uangku dan fitur pemulihan sandi. Cek ID Telegram Anda di <b>@userinfobot</b>.
-                  </p>
-                </div>
+                {isLoadingProfile ? (
+                  <div className="flex items-center gap-2 text-xs text-slate-400 p-2">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Memeriksa kaitan...
+                  </div>
+                ) : currentTelegramId ? (
+                  /* JIKA SUDAH KETAUT, TAMPILKAN STATUS INI */
+                  <div className="flex items-center justify-between p-3 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl text-sm font-medium animate-in fade-in duration-200">
+                    <div className="flex items-center gap-2 truncate">
+                      <div className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0"></div>
+                      <span className="truncate">Terkait ID: <b>{currentTelegramId}</b></span>
+                    </div>
+                    <button 
+                      onClick={handleUnlinkTgFromWeb}
+                      className="text-xs text-rose-600 hover:text-rose-800 font-bold underline ml-2 flex-shrink-0"
+                    >
+                      Lepas
+                    </button>
+                  </div>
+                ) : (
+                  /* JIKA BELUM KETAUT, TAMPILKAN INPUT FORM INI */
+                  <div className="animate-in fade-in duration-200">
+                    <div className="flex gap-2">
+                      <input 
+                        type="text" 
+                        placeholder="Masukkan ID (mis: 12345678)" 
+                        value={tgInput} 
+                        onChange={(e) => setTgInput(e.target.value)} 
+                        className="flex-1 px-3 py-2.5 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all" 
+                      />
+                      <button 
+                        onClick={handleLinkTg} 
+                        disabled={isLinkingTg} 
+                        className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-70 disabled:cursor-not-allowed whitespace-nowrap"
+                      >
+                        {isLinkingTg ? 'Mengirim...' : 'Verifikasi'}
+                      </button>
+                    </div>
+                    
+                    <div className="flex items-start gap-2 mt-3 bg-indigo-50/50 p-2.5 rounded-lg border border-indigo-100">
+                      <Info className="w-4 h-4 text-indigo-500 flex-shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-slate-600 leading-relaxed">
+                        Kaitkan akun untuk menggunakan Bot Uangku dan fitur pemulihan sandi. Cek ID Telegram Anda di <b>@userinfobot</b>.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
