@@ -15,18 +15,20 @@ export function Layout() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState<'income' | 'expense'>('expense');
   
-  // STATE MANAGEMENT LU
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [tgInput, setTgInput] = useState('');
   const [isLinkingTg, setIsLinkingTg] = useState(false);
   const [currentTelegramId, setCurrentTelegramId] = useState<string | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  
+  // STATE BARU BUAT LIVE POLLING (MENUNGGU VERIFIKASI)
+  const [isWaitingTg, setIsWaitingTg] = useState(false);
 
   const { exportData, importData, syncStatus } = useFinance();
   const { user, logout } = useAuth();
   
-  // CHECK STATUS TELEGRAM REALTIME SAAT MODAL DIBUKA
+  // EFEK 1: CEK STATUS SAAT MODAL DIBUKA
   useEffect(() => {
     if (isProfileMenuOpen && user?.username) {
       setIsLoadingProfile(true);
@@ -45,8 +47,36 @@ export function Layout() {
       })
       .catch(() => {})
       .finally(() => setIsLoadingProfile(false));
+    } else {
+      // Reset state kalau modal ditutup
+      setIsWaitingTg(false);
+      setTgInput('');
     }
   }, [isProfileMenuOpen, user?.username]);
+
+  // EFEK 2: LIVE POLLING (CEK DATABASE TIAP 2 DETIK SAAT NUNGGU KLIK DI TELEGRAM)
+  useEffect(() => {
+    let interval: any;
+    if (isWaitingTg && user?.username) {
+      interval = setInterval(() => {
+        fetch('/api/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'get_profile', username: user.username })
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.telegramId) {
+            // BERHASIL! MATIKAN POLLING & UPDATE UI
+            setCurrentTelegramId(String(data.telegramId));
+            setIsWaitingTg(false); 
+          }
+        })
+        .catch(() => {});
+      }, 2000); // Ngecek tiap 2 detik
+    }
+    return () => clearInterval(interval);
+  }, [isWaitingTg, user?.username]);
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -87,9 +117,8 @@ export function Layout() {
       const data = await res.json();
       
       if (res.ok) {
-        alert("✅ Permintaan terkirim! Silakan buka bot Telegram Uangku dan klik tombol 'Verifikasi & Tautkan'.");
-        setTgInput('');
-        setIsProfileMenuOpen(false);
+        // UBAH UI JADI MODE MENUNGGU (LIVE POLLING)
+        setIsWaitingTg(true);
       } else {
         alert("❌ Gagal: " + (data.error || "Terjadi kesalahan di server."));
       }
@@ -100,7 +129,6 @@ export function Layout() {
     }
   };
 
-  // FUNGSI LEPAS KAITAN LANGSUNG DARI WEB
   const handleUnlinkTgFromWeb = async () => {
     if (!window.confirm("Apakah Anda yakin ingin melepas kaitan Telegram dari akun ini?")) return;
     
@@ -330,7 +358,7 @@ export function Layout() {
         </div>
       )}
 
-      {/* MODAL 2: INFORMASI AKUN (DENGAN RECOGNITION STATUS TELEGRAM ID) */}
+      {/* MODAL 2: INFORMASI AKUN (DENGAN LIVE POLLING) */}
       {isProfileMenuOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl scale-in-95">
@@ -360,7 +388,6 @@ export function Layout() {
                     <Loader2 className="w-4 h-4 animate-spin" /> Memeriksa kaitan...
                   </div>
                 ) : currentTelegramId ? (
-                  /* JIKA SUDAH KETAUT, TAMPILKAN STATUS INI */
                   <div className="flex items-center justify-between p-3 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl text-sm font-medium animate-in fade-in duration-200">
                     <div className="flex items-center gap-2 truncate">
                       <div className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0"></div>
@@ -373,8 +400,15 @@ export function Layout() {
                       Lepas
                     </button>
                   </div>
+                ) : isWaitingTg ? (
+                  /* UI BARU: MODE MENUNGGU VERIFIKASI (LIVE POLLING) */
+                  <div className="flex flex-col items-center justify-center p-4 bg-indigo-50 border border-indigo-100 rounded-xl text-center animate-in fade-in zoom-in-95 duration-300">
+                    <Loader2 className="w-6 h-6 text-indigo-600 animate-spin mb-2" />
+                    <p className="text-sm font-bold text-slate-800">Menunggu Verifikasi...</p>
+                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">Silakan buka bot Telegram dan klik tombol <b>"✅ Verifikasi & Tautkan"</b>. Layar ini akan diperbarui otomatis.</p>
+                    <button onClick={() => setIsWaitingTg(false)} className="mt-3 text-xs text-rose-600 hover:text-rose-800 font-bold underline">Batal</button>
+                  </div>
                 ) : (
-                  /* JIKA BELUM KETAUT, TAMPILKAN INPUT FORM INI */
                   <div className="animate-in fade-in duration-200">
                     <div className="flex gap-2">
                       <input 
@@ -405,10 +439,7 @@ export function Layout() {
             </div>
 
             <button 
-              onClick={() => {
-                setIsProfileMenuOpen(false);
-                setTgInput('');
-              }} 
+              onClick={() => setIsProfileMenuOpen(false)} 
               className="w-full py-2.5 bg-slate-100 text-slate-700 hover:bg-slate-200 font-bold rounded-xl transition-colors"
             >
               Tutup
