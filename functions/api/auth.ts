@@ -18,7 +18,8 @@ export async function onRequest({ request, env }: { request: Request, env: Env }
   }
 
   try {
-    const { action, username, password } = await request.json();
+    // TAMBAHAN: Nangkep telegramId dari request API
+    const { action, username, password, telegramId } = await request.json();
     
     if (!username || !password) {
       return new Response(JSON.stringify({ error: 'Username dan password diperlukan' }), {
@@ -40,11 +41,19 @@ export async function onRequest({ request, env }: { request: Request, env: Env }
       }
 
       const id = crypto.randomUUID();
-      await env.finansialv2.put(userKey, JSON.stringify({
+      
+      // TAMBAHAN: Bikin object data user, masukin telegramId kalau ada
+      const userData: any = {
         id,
         username,
         passwordHash: hashedPw
-      }));
+      };
+      
+      if (telegramId) {
+        userData.telegramId = telegramId; // Simpan ID Telegram ke database web!
+      }
+
+      await env.finansialv2.put(userKey, JSON.stringify(userData));
 
       return new Response(JSON.stringify({ token: id, username }), {
         headers: { 'Content-Type': 'application/json' },
