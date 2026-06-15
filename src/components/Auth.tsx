@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { Database, Loader2, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { Database, Loader2, ArrowRight, Eye, EyeOff, Info } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export function Auth() {
@@ -8,6 +8,7 @@ export function Auth() {
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [telegramId, setTelegramId] = useState(''); // State baru untuk Telegram ID
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -25,10 +26,17 @@ export function Auth() {
 
     try {
       const action = isLogin ? 'login' : 'register';
+      
+      // Siapkan payload, tambahkan telegramId khusus untuk register jika diisi
+      const payload: any = { action, username, password };
+      if (!isLogin && telegramId.trim() !== '') {
+        payload.telegramId = telegramId.trim();
+      }
+
       const res = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, username, password })
+        body: JSON.stringify(payload)
       });
 
       const contentType = res.headers.get("content-type");
@@ -41,7 +49,7 @@ export function Auth() {
 
         login(data.token, data.username);
       } else {
-        // Fallback untuk testing di Preview AI Studio (karena Cloudflare Functions tidak berjalan di dev server Vite)
+        // Fallback untuk testing di Preview AI Studio
         console.log("Mode Preview Lokal Aktif: Simulasi Auth");
         await new Promise(resolve => setTimeout(resolve, 800)); // Simulasi jeda network
         
@@ -123,6 +131,28 @@ export function Auth() {
             </div>
           </div>
 
+          {/* Form tambahan khusus Register: Telegram ID */}
+          {!isLogin && (
+            <div className="animate-in fade-in duration-300">
+              <label className="flex items-center text-sm font-bold text-slate-700 mb-1.5 gap-1.5">
+                Telegram ID <span className="text-slate-400 font-normal text-xs">(Opsional)</span>
+              </label>
+              <input
+                type="text"
+                value={telegramId}
+                onChange={e => setTelegramId(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-medium"
+                placeholder="Contoh: 123456789"
+              />
+              <div className="flex items-start gap-2 mt-2 bg-indigo-50/50 p-2.5 rounded-lg border border-indigo-100">
+                <Info className="w-4 h-4 text-indigo-500 flex-shrink-0 mt-0.5" />
+                <p className="text-[11px] text-slate-600 leading-relaxed">
+                  Isi dengan ID Telegram untuk menggunakan bot. Cek ID Anda melalui bot <b>@userinfobot</b> di Telegram.
+                </p>
+              </div>
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={loading}
@@ -138,6 +168,7 @@ export function Auth() {
               onClick={() => {
                 setIsLogin(!isLogin);
                 setError('');
+                setTelegramId(''); // Reset telegram ID saat ganti mode
               }}
               className="text-sm text-slate-500 hover:text-indigo-600 font-medium transition-colors"
             >
