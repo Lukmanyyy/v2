@@ -8,14 +8,18 @@ export function Auth() {
   const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [telegramId, setTelegramId] = useState(''); // State baru untuk Telegram ID
+  const [telegramId, setTelegramId] = useState(''); 
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  // State untuk nampilin pesan Lupa Password
+  const [showForgotPassInfo, setShowForgotPassInfo] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setShowForgotPassInfo(false);
     
     if (!username || !password) {
       setError('Username dan password harus diisi');
@@ -27,7 +31,6 @@ export function Auth() {
     try {
       const action = isLogin ? 'login' : 'register';
       
-      // Siapkan payload, tambahkan telegramId khusus untuk register jika diisi
       const payload: any = { action, username, password };
       if (!isLogin && telegramId.trim() !== '') {
         payload.telegramId = telegramId.trim();
@@ -49,9 +52,8 @@ export function Auth() {
 
         login(data.token, data.username);
       } else {
-        // Fallback untuk testing di Preview AI Studio
         console.log("Mode Preview Lokal Aktif: Simulasi Auth");
-        await new Promise(resolve => setTimeout(resolve, 800)); // Simulasi jeda network
+        await new Promise(resolve => setTimeout(resolve, 800)); 
         
         const key = 'finansialv2_mock_users';
         const users = JSON.parse(localStorage.getItem(key) || '{}');
@@ -94,9 +96,20 @@ export function Auth() {
         </div>
 
         <form onSubmit={handleSubmit} className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+          
           {error && (
             <div className="p-3 bg-rose-50 text-rose-600 border border-rose-200 rounded-xl text-sm font-medium">
               {error}
+            </div>
+          )}
+
+          {/* BOX INFO LUPA PASSWORD */}
+          {showForgotPassInfo && (
+            <div className="p-3 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl text-sm font-medium flex items-start gap-2 animate-in fade-in slide-in-from-top-2">
+              <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
+              <p>
+                Untuk mereset password, silakan buka <b>Bot Telegram Uangku</b> dan klik tombol <b>🔑 Lupa Sandi</b>. Kami memprioritaskan keamanan berlapis lewat Telegram.
+              </p>
             </div>
           )}
 
@@ -129,9 +142,21 @@ export function Auth() {
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
+            
+            {/* LINK LUPA PASSWORD DI WEB */}
+            {isLogin && (
+              <div className="flex justify-end mt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowForgotPassInfo(true)}
+                  className="text-xs text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
+                >
+                  Lupa Password?
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Form tambahan khusus Register: Telegram ID */}
           {!isLogin && (
             <div className="animate-in fade-in duration-300">
               <label className="flex items-center text-sm font-bold text-slate-700 mb-1.5 gap-1.5">
@@ -147,7 +172,7 @@ export function Auth() {
               <div className="flex items-start gap-2 mt-2 bg-indigo-50/50 p-2.5 rounded-lg border border-indigo-100">
                 <Info className="w-4 h-4 text-indigo-500 flex-shrink-0 mt-0.5" />
                 <p className="text-[11px] text-slate-600 leading-relaxed">
-                  Isi dengan ID Telegram untuk menggunakan bot. Cek ID Anda melalui bot <b>@userinfobot</b> di Telegram.
+                  Isi dengan ID Telegram untuk menggunakan bot & mengamankan akun. Cek ID Anda melalui bot <b>@userinfobot</b>.
                 </p>
               </div>
             </div>
@@ -168,7 +193,8 @@ export function Auth() {
               onClick={() => {
                 setIsLogin(!isLogin);
                 setError('');
-                setTelegramId(''); // Reset telegram ID saat ganti mode
+                setShowForgotPassInfo(false);
+                setTelegramId(''); 
               }}
               className="text-sm text-slate-500 hover:text-indigo-600 font-medium transition-colors"
             >
