@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Dashboard } from './Dashboard';
 import { Transactions } from './Transactions';
 import { Accounts } from './Accounts';
 import { Reports } from './Reports';
 import { AddTransactionModal } from './AddTransactionModal';
-import { LayoutDashboard, ReceiptText, Plus, Database, Download, Upload, Wallet, FileText, LogOut, User, Link as LinkIcon, Info, Loader2 } from 'lucide-react';
+import { LayoutDashboard, ReceiptText, Plus, Database, Download, Upload, Wallet, FileText, LogOut, User, Link as LinkIcon, Info, Loader2, RefreshCw } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { ErrorBoundary } from './ErrorBoundary';
 import { useFinance } from '../hooks/useFinance';
@@ -15,68 +15,73 @@ export function Layout() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState<'income' | 'expense'>('expense');
   
+  // STATE MANAGEMENT
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [tgInput, setTgInput] = useState('');
   const [isLinkingTg, setIsLinkingTg] = useState(false);
   const [currentTelegramId, setCurrentTelegramId] = useState<string | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
-  
-  // STATE BARU BUAT LIVE POLLING (MENUNGGU VERIFIKASI)
   const [isWaitingTg, setIsWaitingTg] = useState(false);
+  const [isManualChecking, setIsManualChecking] = useState(false);
 
   const { exportData, importData, syncStatus } = useFinance();
   const { user, logout } = useAuth();
   
-  // EFEK 1: CEK STATUS SAAT MODAL DIBUKA
-  useEffect(() => {
-    if (isProfileMenuOpen && user?.username) {
-      setIsLoadingProfile(true);
-      fetch('/api/auth', {
+  // FUNGSI TARIK DATA PROFIL DARI DATABASE
+  const fetchProfileStatus = useCallback(async () => {
+    if (!user?.username) return false;
+    try {
+      const res = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'get_profile', username: user.username })
-      })
-      .then(res => res.json())
-      .then(data => {
+      });
+      if (res.ok) {
+        const data = await res.json();
         if (data.telegramId) {
           setCurrentTelegramId(String(data.telegramId));
-        } else {
-          setCurrentTelegramId(null);
+          setIsWaitingTg(false); 
+          return true;
         }
-      })
-      .catch(() => {})
-      .finally(() => setIsLoadingProfile(false));
+      }
+    } catch (e) {
+      // silent error buat polling
+    }
+    return false;
+  }, [user?.username]);
+
+  // EFEK 1: CEK STATUS SAAT MODAL DIBUKA
+  useEffect(() => {
+    if (isProfileMenuOpen) {
+      setIsLoadingProfile(true);
+      fetchProfileStatus().finally(() => setIsLoadingProfile(false));
     } else {
-      // Reset state kalau modal ditutup
       setIsWaitingTg(false);
       setTgInput('');
     }
-  }, [isProfileMenuOpen, user?.username]);
+  }, [isProfileMenuOpen, fetchProfileStatus]);
 
-  // EFEK 2: LIVE POLLING (CEK DATABASE TIAP 2 DETIK SAAT NUNGGU KLIK DI TELEGRAM)
+  // EFEK 2: LIVE POLLING (Tiap 3 detik kalau HP ga ketiduran)
   useEffect(() => {
     let interval: any;
-    if (isWaitingTg && user?.username) {
+    if (isWaitingTg) {
       interval = setInterval(() => {
-        fetch('/api/auth', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'get_profile', username: user.username })
-        })
-        .then(res => res.json())
-        .then(data => {
-          if (data.telegramId) {
-            // BERHASIL! MATIKAN POLLING & UPDATE UI
-            setCurrentTelegramId(String(data.telegramId));
-            setIsWaitingTg(false); 
-          }
-        })
-        .catch(() => {});
-      }, 2000); // Ngecek tiap 2 detik
+        fetchProfileStatus();
+      }, 3000); 
     }
     return () => clearInterval(interval);
-  }, [isWaitingTg, user?.username]);
+  }, [isWaitingTg, fetchProfileStatus]);
+
+  // FUNGSI KLIK CEK STATUS MANUAL
+  const handleManualCheck = async () => {
+    setIsManualChecking(true);
+    const success = await fetchProfileStatus();
+    if (!success) {
+      alert("⏳ Belum terverifikasi. Pastikan Anda sudah klik tombol 'Verifikasi & Tautkan' di Telegram.");
+    }
+    setIsManualChecking(false);
+  };
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -86,11 +91,8 @@ export function Layout() {
     reader.onload = (event) => {
       const content = event.target?.result as string;
       const success = importData(content);
-      if (success) {
-        alert("Data berhasil diimpor!");
-      } else {
-        alert("Gagal mengimpor data. Pastikan format file adalah JSON.");
-      }
+      if (success) alert("Data berhasil diimpor!");
+      else alert("Gagal mengimpor data. Pastikan format file adalah JSON.");
     };
     reader.readAsText(file);
     e.target.value = ''; 
@@ -102,10 +104,7 @@ export function Layout() {
   };
 
   const handleLinkTg = async () => {
-    if (!tgInput.trim()) {
-      alert("Masukkan ID Telegram terlebih dahulu!");
-      return;
-    }
+    if (!tgInput.trim()) return alert("Masukkan ID Telegram terlebih dahulu!");
     
     setIsLinkingTg(true);
     try {
@@ -114,12 +113,10 @@ export function Layout() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'request_tg_link', username: user?.username, telegramId: tgInput })
       });
-      const data = await res.json();
-      
       if (res.ok) {
-        // UBAH UI JADI MODE MENUNGGU (LIVE POLLING)
         setIsWaitingTg(true);
       } else {
+        const data = await res.json();
         alert("❌ Gagal: " + (data.error || "Terjadi kesalahan di server."));
       }
     } catch (e) {
@@ -218,37 +215,28 @@ export function Layout() {
               onClick={() => setActiveTab('dashboard')}
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors",
-                activeTab === 'dashboard' 
-                  ? "bg-indigo-50 text-indigo-700" 
-                  : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                activeTab === 'dashboard' ? "bg-indigo-50 text-indigo-700" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
               )}
             >
-              <LayoutDashboard className="w-5 h-5" />
-              Dasbor
+              <LayoutDashboard className="w-5 h-5" /> Dasbor
             </button>
             <button
               onClick={() => setActiveTab('transactions')}
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors",
-                activeTab === 'transactions' 
-                  ? "bg-indigo-50 text-indigo-700" 
-                  : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                activeTab === 'transactions' ? "bg-indigo-50 text-indigo-700" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
               )}
             >
-              <ReceiptText className="w-5 h-5" />
-              Transaksi
+              <ReceiptText className="w-5 h-5" /> Transaksi
             </button>
             <button
               onClick={() => setActiveTab('accounts')}
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-colors",
-                activeTab === 'accounts' 
-                  ? "bg-indigo-50 text-indigo-700" 
-                  : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                activeTab === 'accounts' ? "bg-indigo-50 text-indigo-700" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
               )}
             >
-              <Wallet className="w-5 h-5" />
-              Dompet / Kas
+              <Wallet className="w-5 h-5" /> Dompet / Kas
             </button>
           </nav>
 
@@ -256,8 +244,7 @@ export function Layout() {
             onClick={() => openModal('expense')}
             className="w-full bg-slate-900 text-white py-3 rounded-xl font-semibold text-sm shadow-lg hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
           >
-            <Plus className="w-4 h-4" />
-            Transaksi Baru
+            <Plus className="w-4 h-4" /> Transaksi Baru
           </button>
           
           <div className="pt-6 mt-2 border-t border-slate-200">
@@ -285,9 +272,7 @@ export function Layout() {
               onClick={() => setActiveTab('dashboard')}
               className={cn(
                 "flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-medium transition-colors text-sm",
-                activeTab === 'dashboard' 
-                  ? "bg-indigo-50 text-indigo-700" 
-                  : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                activeTab === 'dashboard' ? "bg-indigo-50 text-indigo-700" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
               )}
             >
               <LayoutDashboard className="w-4 h-4" /> Dasbor
@@ -296,9 +281,7 @@ export function Layout() {
               onClick={() => setActiveTab('transactions')}
               className={cn(
                 "flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-medium transition-colors text-sm",
-                activeTab === 'transactions' 
-                  ? "bg-indigo-50 text-indigo-700" 
-                  : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                activeTab === 'transactions' ? "bg-indigo-50 text-indigo-700" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
               )}
             >
               <ReceiptText className="w-4 h-4" /> Transaksi
@@ -307,9 +290,7 @@ export function Layout() {
               onClick={() => setActiveTab('accounts')}
               className={cn(
                 "flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-medium transition-colors text-sm",
-                activeTab === 'accounts' 
-                  ? "bg-indigo-50 text-indigo-700" 
-                  : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                activeTab === 'accounts' ? "bg-indigo-50 text-indigo-700" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
               )}
             >
               <Wallet className="w-4 h-4" /> Dompet
@@ -358,7 +339,7 @@ export function Layout() {
         </div>
       )}
 
-      {/* MODAL 2: INFORMASI AKUN (DENGAN LIVE POLLING) */}
+      {/* MODAL 2: INFORMASI AKUN & TAUTKAN TELEGRAM */}
       {isProfileMenuOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl scale-in-95">
@@ -375,7 +356,7 @@ export function Layout() {
             <div className="space-y-4 mb-6">
               <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Username Terdaftar</label>
-                <div className="font-bold text-slate-800 text-lg">{user?.username}</div>
+                <div className="font-bold text-slate-800 text-lg truncate">{user?.username}</div>
               </div>
 
               <div>
@@ -388,27 +369,57 @@ export function Layout() {
                     <Loader2 className="w-4 h-4 animate-spin" /> Memeriksa kaitan...
                   </div>
                 ) : currentTelegramId ? (
-                  <div className="flex items-center justify-between p-3 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl text-sm font-medium animate-in fade-in duration-200">
-                    <div className="flex items-center gap-2 truncate">
-                      <div className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0"></div>
-                      <span className="truncate">Terkait ID: <b>{currentTelegramId}</b></span>
+                  
+                  /* JIKA SUDAH KETAUT, TAMPILKAN UI INI */
+                  <div className="flex flex-col gap-3 p-4 bg-emerald-50 border border-emerald-100 rounded-xl animate-in fade-in duration-200 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse flex-shrink-0"></div>
+                        <span className="text-sm font-bold text-emerald-800 uppercase tracking-wide">Terhubung</span>
+                      </div>
+                      <button 
+                        onClick={handleUnlinkTgFromWeb}
+                        className="text-xs font-bold text-rose-600 bg-white border border-rose-100 hover:bg-rose-50 px-3 py-1.5 rounded-lg transition-colors shadow-sm"
+                      >
+                        Lepas Kaitan
+                      </button>
                     </div>
-                    <button 
-                      onClick={handleUnlinkTgFromWeb}
-                      className="text-xs text-rose-600 hover:text-rose-800 font-bold underline ml-2 flex-shrink-0"
-                    >
-                      Lepas
-                    </button>
+                    <div className="pt-3 border-t border-emerald-200/50">
+                      <p className="text-xs text-emerald-600 mb-1">ID Telegram Anda:</p>
+                      <p className="text-base font-bold text-emerald-900 truncate">{currentTelegramId}</p>
+                    </div>
                   </div>
+
                 ) : isWaitingTg ? (
-                  /* UI BARU: MODE MENUNGGU VERIFIKASI (LIVE POLLING) */
-                  <div className="flex flex-col items-center justify-center p-4 bg-indigo-50 border border-indigo-100 rounded-xl text-center animate-in fade-in zoom-in-95 duration-300">
-                    <Loader2 className="w-6 h-6 text-indigo-600 animate-spin mb-2" />
+                  
+                  /* JIKA SEDANG MENUNGGU (DENGAN TOMBOL CEK MANUAL) */
+                  <div className="flex flex-col items-center justify-center p-5 bg-indigo-50 border border-indigo-100 rounded-xl text-center animate-in fade-in zoom-in-95 duration-300">
+                    <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mb-3" />
                     <p className="text-sm font-bold text-slate-800">Menunggu Verifikasi...</p>
-                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">Silakan buka bot Telegram dan klik tombol <b>"✅ Verifikasi & Tautkan"</b>. Layar ini akan diperbarui otomatis.</p>
-                    <button onClick={() => setIsWaitingTg(false)} className="mt-3 text-xs text-rose-600 hover:text-rose-800 font-bold underline">Batal</button>
+                    <p className="text-xs text-slate-500 mt-1.5 leading-relaxed px-2">
+                      Buka bot Telegram dan klik <b>"✅ Verifikasi & Tautkan"</b>.
+                    </p>
+                    <div className="flex items-center gap-3 mt-5 w-full">
+                      <button 
+                        onClick={() => setIsWaitingTg(false)} 
+                        className="flex-1 py-2.5 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+                      >
+                        Batal
+                      </button>
+                      <button 
+                        onClick={handleManualCheck} 
+                        disabled={isManualChecking}
+                        className="flex-1 py-2.5 flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-70"
+                      >
+                        {isManualChecking ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />} 
+                        Cek Status
+                      </button>
+                    </div>
                   </div>
+
                 ) : (
+                  
+                  /* JIKA BELUM KETAUT SAMA SEKALI */
                   <div className="animate-in fade-in duration-200">
                     <div className="flex gap-2">
                       <input 
