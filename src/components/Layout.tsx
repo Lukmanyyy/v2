@@ -4,7 +4,7 @@ import { Transactions } from './Transactions';
 import { Accounts } from './Accounts';
 import { Reports } from './Reports';
 import { AddTransactionModal } from './AddTransactionModal';
-import { LayoutDashboard, ReceiptText, Plus, Database, Download, Upload, Wallet, FileText, LogOut, User, Link as LinkIcon, Info, Loader2, RefreshCw } from 'lucide-react';
+import { LayoutDashboard, ReceiptText, Plus, Database, Download, Upload, Wallet, FileText, LogOut, User, Link as LinkIcon, Info, Loader2, RefreshCw, Unlink } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { ErrorBoundary } from './ErrorBoundary';
 import { useFinance } from '../hooks/useFinance';
@@ -18,8 +18,11 @@ export function Layout() {
   // STATE MANAGEMENT
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isUnlinkConfirmOpen, setIsUnlinkConfirmOpen] = useState(false); // State Modal Unlink Baru
+  
   const [tgInput, setTgInput] = useState('');
   const [isLinkingTg, setIsLinkingTg] = useState(false);
+  const [isUnlinking, setIsUnlinking] = useState(false);
   const [currentTelegramId, setCurrentTelegramId] = useState<string | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [isWaitingTg, setIsWaitingTg] = useState(false);
@@ -28,6 +31,20 @@ export function Layout() {
   const { exportData, importData, syncStatus } = useFinance();
   const { user, logout } = useAuth();
   
+  // =========================================================
+  // FIX: MENCEGAH BACKGROUND SCROLLING SAAT MODAL TERBUKA
+  // =========================================================
+  useEffect(() => {
+    if (isModalOpen || isLogoutConfirmOpen || isProfileMenuOpen || isUnlinkConfirmOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isModalOpen, isLogoutConfirmOpen, isProfileMenuOpen, isUnlinkConfirmOpen]);
+
   // FUNGSI TARIK DATA PROFIL DARI DATABASE
   const fetchProfileStatus = useCallback(async () => {
     if (!user?.username) return false;
@@ -46,12 +63,11 @@ export function Layout() {
         }
       }
     } catch (e) {
-      // silent error buat polling
+      // silent error
     }
     return false;
   }, [user?.username]);
 
-  // EFEK 1: CEK STATUS SAAT MODAL DIBUKA
   useEffect(() => {
     if (isProfileMenuOpen) {
       setIsLoadingProfile(true);
@@ -62,7 +78,6 @@ export function Layout() {
     }
   }, [isProfileMenuOpen, fetchProfileStatus]);
 
-  // EFEK 2: LIVE POLLING (Tiap 3 detik kalau HP ga ketiduran)
   useEffect(() => {
     let interval: any;
     if (isWaitingTg) {
@@ -73,7 +88,6 @@ export function Layout() {
     return () => clearInterval(interval);
   }, [isWaitingTg, fetchProfileStatus]);
 
-  // FUNGSI KLIK CEK STATUS MANUAL
   const handleManualCheck = async () => {
     setIsManualChecking(true);
     const success = await fetchProfileStatus();
@@ -114,7 +128,7 @@ export function Layout() {
         body: JSON.stringify({ action: 'request_tg_link', username: user?.username, telegramId: tgInput })
       });
       if (res.ok) {
-        setIsWaitingTg(true);
+        setIsWaitingTg(true); // Langsung ubah UI tanpa alert
       } else {
         const data = await res.json();
         alert("❌ Gagal: " + (data.error || "Terjadi kesalahan di server."));
@@ -126,9 +140,11 @@ export function Layout() {
     }
   };
 
-  const handleUnlinkTgFromWeb = async () => {
-    if (!window.confirm("Apakah Anda yakin ingin melepas kaitan Telegram dari akun ini?")) return;
-    
+  // =========================================================
+  // FIX: EKSEKUSI LEPAS KAITAN DENGAN UI KUSTOM
+  // =========================================================
+  const executeUnlinkTg = async () => {
+    setIsUnlinking(true);
     try {
       const res = await fetch('/api/auth', {
         method: 'POST',
@@ -136,13 +152,16 @@ export function Layout() {
         body: JSON.stringify({ action: 'unlink_tg', username: user?.username })
       });
       if (res.ok) {
-        alert("✅ Kaitan Telegram berhasil dilepas!");
         setCurrentTelegramId(null);
+        setIsUnlinkConfirmOpen(false); // Tutup modal confirm
+        // UI Profile akan otomatis update tanpa perlu alert lagi
       } else {
         alert("❌ Gagal melepas kaitan.");
       }
     } catch (e) {
       alert("❌ Terjadi kesalahan jaringan.");
+    } finally {
+      setIsUnlinking(false);
     }
   };
 
@@ -324,7 +343,7 @@ export function Layout() {
 
       {/* MODAL 1: KONFIRMASI LOGOUT */}
       {isLogoutConfirmOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm text-center shadow-2xl scale-in-95">
             <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-4">
               <LogOut className="w-6 h-6 ml-1" />
@@ -339,7 +358,36 @@ export function Layout() {
         </div>
       )}
 
-      {/* MODAL 2: INFORMASI AKUN & TAUTKAN TELEGRAM */}
+      {/* MODAL 2: KONFIRMASI LEPAS KAITAN TELEGRAM */}
+      {isUnlinkConfirmOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm text-center shadow-2xl scale-in-95">
+            <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Unlink className="w-6 h-6" />
+            </div>
+            <h3 className="text-xl font-bold text-slate-800 mb-2">Lepas Kaitan?</h3>
+            <p className="text-sm text-slate-500 mb-6">Anda tidak akan bisa lagi menggunakan bot ini atau mereset password via Telegram sampai Anda menautkannya kembali.</p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setIsUnlinkConfirmOpen(false)} 
+                disabled={isUnlinking}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 transition-colors disabled:opacity-70"
+              >
+                Batal
+              </button>
+              <button 
+                onClick={executeUnlinkTg} 
+                disabled={isUnlinking}
+                className="flex-1 flex justify-center items-center py-2.5 rounded-xl bg-rose-600 text-white font-bold hover:bg-rose-700 transition-colors disabled:opacity-70"
+              >
+                {isUnlinking ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Ya, Lepas'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: INFORMASI AKUN */}
       {isProfileMenuOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl scale-in-95">
@@ -378,7 +426,7 @@ export function Layout() {
                         <span className="text-sm font-bold text-emerald-800 uppercase tracking-wide">Terhubung</span>
                       </div>
                       <button 
-                        onClick={handleUnlinkTgFromWeb}
+                        onClick={() => setIsUnlinkConfirmOpen(true)}
                         className="text-xs font-bold text-rose-600 bg-white border border-rose-100 hover:bg-rose-50 px-3 py-1.5 rounded-lg transition-colors shadow-sm"
                       >
                         Lepas Kaitan
@@ -434,7 +482,7 @@ export function Layout() {
                         disabled={isLinkingTg} 
                         className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold transition-colors disabled:opacity-70 disabled:cursor-not-allowed whitespace-nowrap"
                       >
-                        {isLinkingTg ? 'Mengirim...' : 'Verifikasi'}
+                        {isLinkingTg ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Verifikasi'}
                       </button>
                     </div>
                     
